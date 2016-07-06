@@ -4,7 +4,10 @@ An alternative client for razercfg for my personal use.
 
 ## Install
 
-download `razercfg-cli` and `sudo cp razercfg-cli /usr/local/bin`
+```sh
+wget https://raw.githubusercontent.com/janstuemmel/razercfg-cli/master/razercfg-cli
+sudo cp razercfg-cli /usr/local/bin
+```
 
 ## Usage
 
