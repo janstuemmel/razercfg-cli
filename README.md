@@ -1,6 +1,6 @@
 # Razercfg-cli
 
-An alternative client for razercfg for my personal use.
+An alternative client for the [razer](https://github.com/mbuesch/razer) linux driver for my personal use.
 
 ## Install
 
