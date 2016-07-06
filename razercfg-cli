@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+
+import argparse
+from pyrazer import *
+
+razer = None
+
+# helpers
+def array_get(a, n, default=None):
+    try:
+        return a[n]
+    except IndexError:
+        return default
+
+def get_mouse(id):
+    mice = razer.getMice()
+
+    if id and id.isdigit():
+        try:
+            return mice[int(id)]
+        except:
+            raise Exception('no mouse with id ' + id)
+
+    if type(id) == str:
+        try:
+            return mice[mice.index(id)]
+        except:
+            raise Exception('no mouse with id ', id)
+
+    if (mice):
+        return mice[0]
+
+    raise Exception('no razer mouse found')
+
+def get_profile(mouse, id):
+    if(id):
+        return razer.getProfiles(mouse)[int(id)]
+    return razer.getActiveProfile(mouse)
+
+def get_mapping(mouse, id):
+    if(id):
+        return razer.getSupportedDpiMappings(mouse)[int(id)]
+
+    active_profile = get_profile(mouse, None)
+    return razer.getSupportedDpiMappings(mouse)[active_profile]
+
+
+def arg_mice(args):
+    for i, m in enumerate(razer.getMice()):
+        print (i, m)
+
+def arg_profiles(args):
+
+    mouse = get_mouse(args.mouse)
+
+    profiles = razer.getProfiles(mouse)
+    active_profile = razer.getActiveProfile(mouse)
+
+
+    if (args.set_active != None):
+        razer.setActiveProfile(mouse, args.set_active)
+
+    if (args.show_active):
+        print (active_profile, razer.getProfileName(mouse, active_profile))
+
+    if (args.show):
+        for p in profiles:
+            if active_profile == p:
+                print ('>', p, razer.getProfileName(mouse, p))
+            else:
+                print (p, razer.getProfileName(mouse, p))
+
+def arg_dpimapping(args):
+    mouse = get_mouse(args.mouse)
+    profile = get_profile(mouse, args.profile)
+
+    active_dpimapping = razer.getDpiMapping(mouse, profile)
+
+    if (args.set_active):
+        razer.setDpiMapping(mouse, profile, int(args.set_active), None)
+
+    if (args.show):
+        for m in razer.getSupportedDpiMappings(mouse):
+            active = "> " if active_dpimapping == m.id else ""
+            print (active+str(m.id), str(m.res[0])+'x'+str(m.res[1]))
+
+    if (args.show_active):
+        print(active_dpimapping)
+
+def arg_res(args):
+    mouse = get_mouse(args.mouse)
+    mapping = get_mapping(mouse, args.mapping)
+
+    active_profile = razer.getActiveProfile(mouse);
+    active_dpimapping = razer.getDpiMapping(mouse, active_profile)
+
+    supported_resolutions = razer.getSupportedRes(mouse)
+
+    if (args.set):
+        res = args.set.split('x')
+        x = int(array_get(res, 0))
+        y = int(array_get(res, 1, x))
+        if x in supported_resolutions and y in supported_resolutions:
+            razer.changeDpiMapping(mouse, mapping.id, 0, x);
+            razer.changeDpiMapping(mouse, mapping.id, 1, y);
+        else:
+            raise Exception('unsupported resolution')
+
+    if args.show:
+        res = razer.getSupportedDpiMappings(mouse)[active_dpimapping].res
+        print (str(res[0]) + "x" + str(res[1]))
+
+def arg_freq(args):
+    mouse = get_mouse(args.mouse)
+    profile = get_profile(mouse, args.profile)
+
+    supported_freqs = razer.getSupportedFreqs(mouse)
+
+    if args.set:
+        if args.set in supported_freqs:
+            razer.setFrequency(mouse, profile, args.set)
+        else:
+            raise Exception('Frequency not supported')
+
+    if args.show:
+        for f in supported_freqs:
+            print (f)
+
+    if args.show_active:
+        print(razer.getCurrentFreq(mouse, profile))
+
+
+def arg_led(args):
+    mouse = get_mouse(args.mouse)
+    profile = get_profile(mouse, args.profile)
+
+    leds = razer.getLeds(mouse)
+
+    def get_led(name):
+        for l in leds:
+            if name == l.name: return l
+
+    if args.show:
+        for l in leds:
+            color = (l.color.r, l.color.g, l.color.b)
+            print ('ID:', l.name, '| State:', l.state, '| Mode:', l.mode.toString(), '| Color: rgb', color)
+
+    if args.led:
+        led = get_led(args.led)
+        if not led:
+            raise Exception('no LED found')
+
+        if args.set_status != None:
+            if not int(args.set_status) in [1, 0]:
+                raise Exception('LED status must be 1 or 0')
+            led.state = int(args.set_status)
+            razer.setLed(mouse, led)
+
+        if args.set_color:
+            try:
+                led.color = led.color.fromString(args.set_color)
+                razer.setLed(mouse, led)
+            except:
+                raise Exception('wrong color format use RRGGBB')
+
+        if args.set_mode:
+            modes = ['static', 'spectrum', 'breathing']
+            if args.set_mode in modes:
+                try:
+                    led.mode.val = modes.index(args.set_mode)
+                    razer.setLed(mouse, led)
+                except:
+                    raise Exception('set mode faild, maybe mode not supported')
+            else:
+                raise Exception('not a valid mode')
+
+def arg_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', '--mouse')
+
+    subparsers = parser.add_subparsers()
+
+    mice = subparsers.add_parser('mice', help='shows mice')
+    mice.set_defaults(func=arg_mice)
+
+    profiles = subparsers.add_parser('profiles', help='shows and sets profiles')
+    profiles.add_argument('-a', '--set_active', type=int, help='sets a profile id active')
+    profiles.add_argument('-S', '--show', action='store_true')
+    profiles.add_argument('-A', '--show-active', action='store_true')
+    profiles.set_defaults(func=arg_profiles)
+
+    dpimapping = subparsers.add_parser('dpimapping', help='shows and sets dpi mappings')
+    dpimapping.add_argument('-p', '--profile', type=int, help='profile id, default: active profile')
+    dpimapping.add_argument('-a', '--set-active', type=int, help='sets a dpi mapping id active')
+    dpimapping.add_argument('-A', '--show-active', action='store_true')
+    dpimapping.add_argument('-S', '--show', action='store_true')
+    dpimapping.set_defaults(func=arg_dpimapping)
+
+    res = subparsers.add_parser('res', help='shows and sets resolutions')
+    res.add_argument('-map', '--mapping', type=int, help='mapping id, default: active mapping')
+    res.add_argument('-s', '--set', help='set a resolution ex. 400x400')
+    res.add_argument('-S', '--show', action='store_true')
+    res.set_defaults(func=arg_res)
+
+    freq = subparsers.add_parser('freq', help='shows and sets frequency')
+    freq.add_argument('-p', '--profile', type=int, help='profile id, default: active profile')
+    freq.add_argument('-s', '--set', type=int, help='set a frequency')
+    freq.add_argument('-S', '--show', action='store_true')
+    freq.add_argument('-A', '--show-active', action='store_true')
+    freq.set_defaults(func=arg_freq)
+
+    led = subparsers.add_parser('led', help='shows and sets leds')
+    led.add_argument('-p', '--profile', type=int, help='profile id, default: active profile')
+    led.add_argument('-l', '--led', type=str, help='select led')
+    led.add_argument('-s', '--set-status', type=int, help='set led status ( 1 on, 0 off)')
+    led.add_argument('-c', '--set-color', type=str, help='set led color ( ex. FF0000 )')
+    led.add_argument('-m', '--set-mode', type=str, help='set led mode')
+    led.add_argument('-S', '--show', action='store_true')
+    led.add_argument('-A', '--show-active', action='store_true')
+    led.set_defaults(func=arg_led)
+
+    return parser
+
+def main():
+    global razer
+    razer = Razer()
+    parser = arg_parser()
+    args = parser.parse_args()
+    try:
+        args.func(args)
+    except Exception as e:
+        print('ERR:', e)
+        parser.print_help()
+
+if __name__ == '__main__':
+    main()
