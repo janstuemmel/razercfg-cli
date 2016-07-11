@@ -76,7 +76,7 @@ def arg_dpimapping(args):
 
     active_dpimapping = razer.getDpiMapping(mouse, profile)
 
-    if (args.set_active):
+    if (args.set_active != None):
         razer.setDpiMapping(mouse, profile, int(args.set_active), None)
 
     if (args.show):
